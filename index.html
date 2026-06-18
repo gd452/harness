@@ -1163,7 +1163,7 @@ function detectLang() {
   const hash = location.hash.replace('#', '').toLowerCase();
   if (['en', 'ko', 'ja'].includes(hash)) return hash;
   const stored = localStorage.getItem('harness-lang');
-  if (stored) return stored;
+  if (stored && ['en', 'ko', 'ja'].includes(stored)) return stored;
   const nav = (navigator.language || '').toLowerCase();
   if (nav.startsWith('ko')) return 'ko';
   if (nav.startsWith('ja')) return 'ja';
@@ -1346,12 +1346,37 @@ document.querySelectorAll('.pattern-card').forEach(card => {
 });
 
 // ── Copy prompt from use case ──
+// Clipboard with a fallback for insecure contexts (e.g. the page opened via
+// file://), where navigator.clipboard is undefined and writeText() would throw,
+// leaving the copy buttons silently dead.
+function copyToClipboard(text) {
+  if (navigator.clipboard && window.isSecureContext) {
+    return navigator.clipboard.writeText(text);
+  }
+  return new Promise((resolve, reject) => {
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.setAttribute('readonly', '');
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      const ok = document.execCommand('copy');
+      document.body.removeChild(ta);
+      ok ? resolve() : reject(new Error('copy command was rejected'));
+    } catch (err) {
+      reject(err);
+    }
+  });
+}
+
 function copyPrompt(el) {
   const hint = el.querySelector('.uc-copy-hint');
   const text = el.textContent.replace(hint.textContent, '').trim();
   const copiedText = (i18n['common.copied'] && i18n['common.copied'][currentLang]) || 'Copied!';
   const clickText = (i18n['common.click_to_copy'] && i18n['common.click_to_copy'][currentLang]) || 'Click to copy';
-  navigator.clipboard.writeText(text).then(() => {
+  copyToClipboard(text).then(() => {
     el.classList.add('copied');
     hint.textContent = copiedText;
     setTimeout(() => { el.classList.remove('copied'); hint.textContent = clickText; }, 2000);
@@ -1372,7 +1397,7 @@ function copyCode(block) {
   const cmd = block.querySelector('.cmd').textContent;
   const copiedText = (i18n['common.copied'] && i18n['common.copied'][currentLang]) || 'Copied!';
   const copyText = (i18n['common.copy'] && i18n['common.copy'][currentLang]) || 'Copy';
-  navigator.clipboard.writeText(cmd).then(() => {
+  copyToClipboard(cmd).then(() => {
     const btn = block.querySelector('.copy-btn');
     btn.textContent = copiedText;
     btn.classList.add('copied');
